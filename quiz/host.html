@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz – Host screen</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { overflow: hidden; }
+  main { height: 100vh; display: flex; flex-direction: column; padding: 2.2vh 2.5vw 7vh; }
+  section { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  h1 { font-size: 4.2vh; margin: 0 0 1vh; }
+  /* setup */
+  #setup { max-width: 760px; margin: 0 auto; justify-content: center; gap: 1.2em; font-size: 1.05rem; }
+  #setup .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 1.2em 1.4em; }
+  #setup label { display: block; margin-bottom: .4em; font-weight: 600; }
+  #errors { color: #ffb4a8; font-size: .92rem; white-space: pre-wrap; max-height: 9em; overflow: auto; }
+  /* lobby */
+  #lobby { align-items: center; text-align: center; }
+  .join { display: flex; gap: 4vw; align-items: center; justify-content: center; margin: 2vh 0; }
+  .join .qr { width: 30vh; height: 30vh; background: #fff; border-radius: 14px; padding: 1vh; }
+  .join .qr svg { width: 100%; height: 100%; display: block; }
+  .code { font-size: 13vh; font-weight: 800; letter-spacing: .12em; color: var(--accent); line-height: 1; }
+  .url { font-size: 2.6vh; color: var(--mute); word-break: break-all; max-width: 46vw; }
+  #teams { display: flex; flex-wrap: wrap; gap: 1vh 1vw; justify-content: center; overflow: auto; }
+  #teams span { background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: .4em 1em; font-size: 2.6vh; cursor: pointer; }
+  /* stage */
+  .top { display: flex; justify-content: space-between; align-items: center; font-size: 2.4vh; color: var(--mute); }
+  #qtext { font-size: 4.6vh; font-weight: 700; line-height: 1.2; margin: 1.5vh 0; text-align: center; }
+  #media { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5vh; }
+  #media:empty { display: none; }
+  #media img, #media video, #media iframe { max-width: 100%; max-height: 100%; border-radius: 12px; border: 0; }
+  #media iframe { height: 100%; aspect-ratio: 16/9; }
+  #media audio { width: 60%; }
+  #choices { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4vh 1.2vw; }
+  #stage.nomedia #choices { flex: 1; }
+  .choice { display: flex; align-items: center; gap: 1vw; padding: 1.6vh 1.4vw; border-radius: 14px; font-size: 3.4vh; font-weight: 600; min-height: 9vh; transition: opacity .3s; }
+  .choice .n { margin-left: auto; font-size: 3vh; font-weight: 800; background: rgba(0,0,0,.28); border-radius: 8px; padding: .1em .6em; }
+  .choice.dim { opacity: .28; }
+  .choice.win { outline: .7vh solid #fff; }
+  #timerrow { display: flex; align-items: center; gap: 1.2vw; margin: 1.4vh 0; font-size: 3vh; font-weight: 700; }
+  #timerrow .bar { flex: 1; height: 1.6vh; }
+  #hint { text-align: center; color: var(--accent); font-size: 2.6vh; font-weight: 600; }
+  /* board */
+  #rows { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; gap: .7vh 2vw; align-content: start; }
+  .row { display: flex; align-items: center; gap: 1vw; background: var(--panel); border-radius: 10px; padding: 0 1.2vw; font-size: var(--fs); height: var(--rh); }
+  .row .rk { width: 2.2em; font-weight: 800; color: var(--mute); }
+  .row .nm { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 600; }
+  .row .last { color: var(--good); font-weight: 600; font-size: .8em; }
+  .row .tot { font-weight: 800; min-width: 4em; text-align: right; font-variant-numeric: tabular-nums; }
+  .row.first { background: #4a3c10; outline: 2px solid var(--accent); }
+  .row.first .rk { color: var(--accent); }
+  /* controls */
+  footer { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: .6em; align-items: center; padding: .6em 2.5vw; background: rgba(18,20,28,.92); border-top: 1px solid var(--line); font-size: .9rem; }
+  footer button { padding: .45em .9em; }
+  footer .sp { flex: 1; }
+</style>
+</head>
+<body>
+<div id="demo" class="banner demo hidden">REHEARSAL MODE – this browser only. Add Firebase keys to config.js for phones.</div>
+<div id="off" class="banner off hidden">Connection lost – reconnecting…</div>
+<main>
+  <section id="setup">
+    <h1>Quiz host</h1>
+    <div class="card hidden" id="resumeCard">
+      <label>Unfinished game found: <span id="resumeInfo"></span></label>
+      <button id="resume">Resume it</button>
+    </div>
+    <div class="card">
+      <label for="title">Game title</label>
+      <input type="text" id="title" value="Trivia Night" maxlength="60">
+    </div>
+    <div class="card">
+      <label for="file">Questions file (.xlsx or .csv)</label>
+      <input type="file" id="file" accept=".csv,.xlsx,.xls">
+      <button class="ghost" id="sample" style="margin-left:.6em">Use sample questions</button>
+      <p id="loaded" class="mute"></p>
+      <div id="errors"></div>
+    </div>
+    <button id="create" disabled>Create game</button>
+  </section>
+
+  <section id="lobby" class="hidden">
+    <h1 id="lobbyTitle"></h1>
+    <div class="join">
+      <div class="qr" id="qr"></div>
+      <div>
+        <div class="mute" style="font-size:3vh">Scan, or open</div>
+        <div class="url" id="joinUrl"></div>
+        <div class="mute" style="font-size:3vh;margin-top:2vh">Game code</div>
+        <div class="code" id="codeBig"></div>
+      </div>
+    </div>
+    <div class="mute" style="font-size:2.8vh;margin-bottom:1.5vh"><b id="teamCount">0</b> teams joined</div>
+    <div id="teams"></div>
+  </section>
+
+  <section id="stage" class="hidden">
+    <div class="top"><span id="qnum"></span><span id="qpts"></span><span id="answered"></span></div>
+    <div id="qtext"></div>
+    <div id="media"></div>
+    <div id="timerrow"><span id="secs"></span><div class="bar"><i id="tbar"></i></div></div>
+    <div id="hint"></div>
+    <div id="choices"></div>
+  </section>
+
+  <section id="board" class="hidden">
+    <h1 id="boardTitle"></h1>
+    <div id="rows"></div>
+  </section>
+</main>
+<footer id="controls" class="hidden">
+  <button id="next">Next ▶ (Space)</button>
+  <button class="ghost" id="lb">Leaderboard (L)</button>
+  <button class="ghost" id="skip">Skip question (K)</button>
+  <span class="sp"></span>
+  <span class="mute" id="status"></span>
+  <button class="ghost" id="csv">Download results</button>
+  <button class="ghost" id="fs">Fullscreen (F)</button>
+</footer>
+
+<script src="config.js"></script>
+<script src="vendor/xlsx.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="store.js"></script>
+<script>
+const $ = id => document.getElementById(id), esc = Quiz.esc, L = Quiz.LETTERS;
+const SAVE = 'quizhost';
+const GRACE = 1500;                     // ms allowed for an answer already in flight when time runs out
+let S, code, title, questions = [], players = {}, answers = {}, hist = {};
+let state = { phase: 'setup' }, shownQi = -1, closing = false, allInTimer = null;
+
+/* ---------- Questions file ---------- */
+const SAMPLE = [
+  ['question','A','B','C','D','answer','points','time','media','start','end'],
+  ['Which planet is known as the Red Planet?','Venus','Mars','Jupiter','Mercury','B',1000,20,'','',''],
+  ['What shape is shown on screen?','Circle','Square','Triangle','Hexagon','C',1000,15,'media/sample.svg','',''],
+  ['Watch the clip. What kind of animal is the main character?','Rabbit','Squirrel','Bear','Fox','A',2000,20,'https://www.youtube.com/watch?v=aqz-KE-bpKQ',30,45],
+  ['What is the capital of Canada?','Toronto','Vancouver','Ottawa','Montréal','C',500,10,'','',''],
+  ['How many provinces does Canada have?','8','10','12','13','B',1500,15,'','',''],
+];
+function toQuestions(rows) {
+  const errs = [], out = [];
+  if (!rows.length) return { out, errs: ['The file is empty.'] };
+  const head = rows[0].map(h => String(h == null ? '' : h).replace(/^﻿/, '').trim().toLowerCase());
+  const col = n => head.indexOf(n);
+  for (const need of ['question', 'a', 'b', 'answer']) if (col(need) < 0) errs.push(`Missing column: ${need}`);
+  if (errs.length) return { out, errs };
+  const cell = (r, n) => { const i = col(n); return i < 0 || r[i] == null ? '' : String(r[i]).trim(); };
+  rows.slice(1).forEach((r, i) => {
+    const line = i + 2, text = cell(r, 'question');
+    if (!text && !L.some(l => cell(r, l.toLowerCase()))) return;              // blank row
+    const choices = L.map(l => cell(r, l.toLowerCase()));
+    while (choices.length > 2 && !choices[choices.length - 1]) choices.pop();
+    const ans = cell(r, 'answer').toUpperCase();
+    if (!text) return errs.push(`Row ${line}: question text is empty`);
+    if (choices.some(c => !c)) return errs.push(`Row ${line}: a choice is empty`);
+    if (!L.slice(0, choices.length).includes(ans)) return errs.push(`Row ${line}: answer must be one of ${L.slice(0, choices.length).join(', ')} (got "${ans}")`);
+    const points = Number(cell(r, 'points')) || 1000, time = Number(cell(r, 'time')) || 20;
+    out.push({ text, choices, answer: ans, points, time: Math.max(5, time),
+      media: cell(r, 'media'), start: Number(cell(r, 'start')) || 0, end: Number(cell(r, 'end')) || 0 });
+  });
+  if (!out.length && !errs.length) errs.push('No questions found.');
+  return { out, errs };
+}
+async function readFile(f) {
+  const isCsv = /\.csv$/i.test(f.name);
+  const wb = isCsv ? XLSX.read(await f.text(), { type: 'string', raw: true }) : XLSX.read(await f.arrayBuffer());
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+}
+function useRows(rows, label) {
+  const { out, errs } = toQuestions(rows);
+  questions = errs.length ? [] : out;
+  $('errors').textContent = errs.join('\n');
+  $('loaded').textContent = errs.length ? `${label}: fix the rows below and load again.` : `${label}: ${out.length} questions ready.`;
+  $('create').disabled = !questions.length;
+}
+$('file').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { useRows(await readFile(f), f.name); } catch (err) { $('errors').textContent = 'Could not read that file: ' + err.message; }
+};
+$('sample').onclick = () => useRows(SAMPLE, 'Sample');
+
+/* ---------- Media ---------- */
+function mediaHtml(q) {
+  const u = q.media; if (!u) return '';
+  const yt = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);
+  if (yt) {
+    const t = u.match(/[?&](?:t|start)=(\d+)/);
+    const start = q.start || (t ? Number(t[1]) : 0);
+    const p = new URLSearchParams({ autoplay: 1, rel: 0, playsinline: 1 });
+    if (start) p.set('start', start);
+    if (q.end) p.set('end', q.end);
+    return `<iframe src="https://www.youtube.com/embed/${yt[1]}?${p}" allow="autoplay; encrypted-media; fullscreen" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+  }
+  const frag = (q.start || q.end) ? `#t=${q.start || 0}${q.end ? ',' + q.end : ''}` : '';
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(u)) return `<video src="${esc(u)}${frag}" controls autoplay playsinline></video>`;
+  if (/\.(mp3|wav|m4a|ogg)(\?|$)/i.test(u)) return `<audio src="${esc(u)}${frag}" controls autoplay></audio>`;
+  return `<img src="${esc(u)}" alt="">`;
+}
+const needsHost = q => !!q.media && !/^<img/.test(mediaHtml(q));   // video/audio: host opens answers manually
+
+/* ---------- Persistence ---------- */
+const save = () => localStorage.setItem(SAVE, JSON.stringify({ code, title, questions, hist }));
+const path = p => `games/${code}/${p}`;
+const setState = patch => { state = { ...state, ...patch }; render(); return S.set(path('state'), state); };
+
+/* ---------- Scoring ---------- */
+function totals() {
+  const rows = Object.keys(players).map(pid => {
+    let total = 0;
+    for (const qi in hist) total += hist[qi][pid] || 0;
+    const last = (hist[state.qi] || {})[pid] || 0;
+    return { pid, name: players[pid].name, total, last };
+  });
+  rows.sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  rows.forEach((r, i) => { r.rank = i && rows[i - 1].total === r.total ? rows[i - 1].rank : i + 1; });
+  return rows;
+}
+function scoreQuestion(qi) {
+  const q = questions[qi], limit = q.time * 1000, got = answers[qi] || {}, pts = {};
+  for (const pid in got) {
+    const a = got[pid], el = Math.max(0, (a.t || 0) - state.startAt);
+    pts[pid] = a.c === q.answer && el <= limit + GRACE
+      ? Math.round(q.points * (1 - 0.5 * Math.min(el, limit) / limit)) : 0;
+  }
+  return pts;
+}
+
+/* ---------- Game flow ---------- */
+async function startQuestion(qi) {
+  const q = questions[qi], wait = needsHost(q);
+  closing = false;
+  await setState({ phase: wait ? 'show' : 'open', qi, total: questions.length, title,
+    q: { text: q.text, choices: q.choices, points: q.points, time: q.time },
+    startAt: wait ? 0 : S.now(), correct: '' });
+}
+const openAnswers = () => setState({ phase: 'open', startAt: S.now() });
+async function closeQuestion() {
+  if (closing || state.phase !== 'open') return;
+  closing = true;
+  hist[state.qi] = scoreQuestion(state.qi);
+  save();
+  const scores = {};
+  totals().forEach(r => { scores[r.pid] = { total: r.total, last: r.last, rank: r.rank, qi: state.qi }; });
+  await S.set(path('scores'), scores);
+  await setState({ phase: 'reveal', correct: questions[state.qi].answer });
+}
+function next() {
+  const p = state.phase;
+  if (p === 'lobby') return Object.keys(players).length || confirm('No teams have joined yet. Start anyway?') ? startQuestion(0) : null;
+  if (p === 'show') return openAnswers();
+  if (p === 'open') return closeQuestion();
+  if (p === 'reveal' || p === 'board') return state.qi + 1 < questions.length ? startQuestion(state.qi + 1) : setState({ phase: 'final' });
+}
+function toggleBoard() {
+  if (state.phase === 'reveal') setState({ phase: 'board' });
+  else if (state.phase === 'board') setState({ phase: 'reveal' });
+}
+function skip() {
+  if (!['show', 'open'].includes(state.phase)) return;
+  if (!confirm('Skip this question? Nobody scores on it.')) return;
+  closing = true;
+  hist[state.qi] = {}; save();
+  state.qi + 1 < questions.length ? startQuestion(state.qi + 1) : setState({ phase: 'final' });
+}
+
+/* ---------- Rendering ---------- */
+function show(id) { ['setup', 'lobby', 'stage', 'board'].forEach(s => $(s).classList.toggle('hidden', s !== id)); }
+function render() {
+  const p = state.phase;
+  $('controls').classList.toggle('hidden', p === 'setup');
+  $('lb').disabled = !['reveal', 'board'].includes(p);
+  $('skip').disabled = !['show', 'open'].includes(p);
+  $('next').disabled = p === 'final';
+  $('next').textContent = ({ lobby: 'Start quiz ▶ (Space)', show: 'Open answers ▶ (Space)', open: 'Close answers ▶ (Space)',
+    reveal: state.qi + 1 < questions.length ? 'Next question ▶ (Space)' : 'Final results ▶ (Space)',
+    board: state.qi + 1 < questions.length ? 'Next question ▶ (Space)' : 'Final results ▶ (Space)' })[p] || 'Finished';
+  $('status').textContent = code ? `Game ${code} · ${Object.keys(players).length} teams` : '';
+  if (p === 'setup') return show('setup');
+  if (p === 'lobby') return renderLobby();
+  if (p === 'board' || p === 'final') return renderBoard();
+  renderStage();
+}
+function renderLobby() {
+  show('lobby');
+  const url = new URL('index.html', location.href); url.search = '?code=' + code;
+  $('lobbyTitle').textContent = title;
+  $('codeBig').textContent = code;
+  $('joinUrl').textContent = url.href.replace(/^https?:\/\//, '');
+  if (!$('qr').dataset.for || $('qr').dataset.for !== code) {
+    const qr = qrcode(0, 'M'); qr.addData(url.href); qr.make();
+    $('qr').innerHTML = qr.createSvgTag({ cellSize: 8, margin: 2, scalable: true });
+    $('qr').dataset.for = code;
+  }
+  const ids = Object.keys(players).sort((a, b) => (players[a].at || 0) - (players[b].at || 0));
+  $('teamCount').textContent = ids.length;
+  $('teams').innerHTML = ids.map(id => `<span data-pid="${esc(id)}" title="Click to remove">${esc(players[id].name)}</span>`).join('');
+}
+function renderStage() {
+  show('stage');
+  const q = questions[state.qi], p = state.phase, got = answers[state.qi] || {};
+  if (shownQi !== state.qi) {
+    shownQi = state.qi;
+    const m = mediaHtml(q);
+    $('media').innerHTML = m;
+    $('stage').classList.toggle('nomedia', !m);
+    $('qtext').textContent = q.text;
+    $('qnum').textContent = `Question ${state.qi + 1} of ${questions.length}`;
+    $('qpts').textContent = `${q.points} points`;
+  }
+  const counts = {}; for (const pid in got) counts[got[pid].c] = (counts[got[pid].c] || 0) + 1;
+  $('choices').innerHTML = q.choices.map((c, i) => {
+    const l = L[i], rev = p === 'reveal';
+    return `<div class="choice ch-${l} ${rev ? (l === q.answer ? 'win' : 'dim') : ''}"><span class="letter">${l}</span><span>${esc(c)}</span>${rev ? `<span class="n">${counts[l] || 0}</span>` : ''}</div>`;
+  }).join('');
+  $('answered').textContent = p === 'show' ? '' : `${Object.keys(got).length} of ${Object.keys(players).length} answered`;
+  $('hint').textContent = p === 'show' ? 'Answers open after the clip – press Space when ready' : '';
+  $('timerrow').style.visibility = p === 'open' ? 'visible' : 'hidden';
+  if (p === 'open') tick();
+}
+function renderBoard() {
+  show('board');
+  const fin = state.phase === 'final', rows = totals();
+  $('boardTitle').textContent = fin ? `Final results${rows[0] ? ' – winner: ' + rows[0].name : ''}` : `Leaderboard after question ${state.qi + 1} of ${questions.length}`;
+  const cols = rows.length > 13 ? 2 : 1, per = Math.ceil(rows.length / cols) || 1;
+  const rh = Math.min(8, 76 / per - 0.7);
+  $('rows').style.gridTemplateRows = `repeat(${per}, auto)`;
+  $('rows').style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  $('rows').style.setProperty('--rh', rh + 'vh');
+  $('rows').style.setProperty('--fs', Math.min(3.4, rh * 0.5) + 'vh');
+  $('rows').innerHTML = rows.map(r => `<div class="row ${r.rank === 1 && r.total > 0 ? 'first' : ''}"><span class="rk">${r.rank}</span><span class="nm">${esc(r.name)}</span>${!fin && r.last ? `<span class="last">+${r.last}</span>` : ''}<span class="tot">${r.total.toLocaleString()}</span></div>`).join('')
+    || '<p class="mute">No teams yet.</p>';
+}
+function tick() {
+  if (state.phase !== 'open') return;
+  const q = questions[state.qi], left = state.startAt + q.time * 1000 - S.now();
+  $('secs').textContent = Math.max(0, Math.ceil(left / 1000));
+  $('tbar').style.transform = `scaleX(${Math.max(0, Math.min(1, left / (q.time * 1000)))})`;
+  if (left <= -800) closeQuestion();
+}
+setInterval(tick, 100);
+
+/* ---------- Results download ---------- */
+function downloadCsv() {
+  const q = v => `"${String(v).replace(/"/g, '""')}"`;
+  const lines = [['Rank', 'Team', 'Total', ...questions.map((_, i) => 'Q' + (i + 1))].map(q).join(',')];
+  totals().forEach(r => lines.push([r.rank, r.name, r.total, ...questions.map((_, i) => (hist[i] || {})[r.pid] || 0)].map(q).join(',')));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' }));
+  a.download = `quiz-results-${code}.csv`; a.click();
+}
+
+/* ---------- Wiring ---------- */
+function listen() {
+  S.on(path('players'), v => { players = v || {}; render(); });
+  S.on(path('answers'), v => {
+    answers = v || {};
+    if (state.phase === 'open') {
+      renderStage();
+      const n = Object.keys(answers[state.qi] || {}).length, need = Object.keys(players).length;
+      if (need && n >= need && !allInTimer) allInTimer = setTimeout(() => { allInTimer = null; closeQuestion(); }, 700);
+    }
+  });
+  S.onConnection(ok => $('off').classList.toggle('hidden', ok));
+}
+async function boot() {
+  $('demo').classList.toggle('hidden', Quiz.LIVE); document.body.classList.toggle('demo', !Quiz.LIVE);
+  try { S = await Quiz.connect(); }
+  catch (e) { $('errors').textContent = 'Could not reach Firebase. Check config.js and your internet connection.\n' + e.message; return; }
+  const saved = JSON.parse(localStorage.getItem(SAVE) || 'null');
+  if (saved && saved.code) {
+    $('resumeCard').classList.remove('hidden');
+    $('resumeInfo').textContent = `${saved.title} (${saved.code}, ${saved.questions.length} questions)`;
+    $('resume').onclick = async () => {
+      ({ code, title, questions, hist } = saved);
+      const st = await S.get(path('state'));
+      if (!st) return alert('That game no longer exists. Create a new one.');
+      state = st; if (!state.q) state.q = null;
+      listen(); render();
+    };
+  }
+}
+$('create').onclick = async () => {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  code = Array.from({ length: 5 }, () => abc[Math.floor(Math.random() * abc.length)]).join('');
+  title = $('title').value.trim() || 'Quiz'; hist = {};
+  save();
+  try {
+    await S.set(path('meta'), { title, total: questions.length, at: S.TS });
+    await setState({ phase: 'lobby', qi: -1, total: questions.length, title });
+  } catch (e) { state = { phase: 'setup' }; render(); $('errors').textContent = 'Could not create the game: ' + e.message; return; }
+  listen();
+};
+$('teams').onclick = e => {
+  const pid = e.target.dataset.pid;
+  if (pid && confirm(`Remove "${players[pid].name}" from the game?`)) S.remove(path('players/' + pid));
+};
+$('controls').addEventListener('click', e => e.target.blur && e.target.blur());
+$('next').onclick = next; $('lb').onclick = toggleBoard; $('skip').onclick = skip; $('csv').onclick = downloadCsv;
+const fullscreen = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+$('fs').onclick = fullscreen;
+document.addEventListener('keydown', e => {
+  if (state.phase === 'setup' || e.target.tagName === 'INPUT' || e.repeat) return;
+  if (e.code === 'Space' || e.code === 'ArrowRight' || e.code === 'PageDown') { e.preventDefault(); next(); }
+  else if (e.key === 'l' || e.key === 'L') toggleBoard();
+  else if (e.key === 'k' || e.key === 'K') skip();
+  else if (e.key === 'f' || e.key === 'F') fullscreen();
+});
+window.addEventListener('beforeunload', e => { if (!['setup', 'final'].includes(state.phase)) e.preventDefault(); });
+boot();
+</script>
+</body>
+</html>
