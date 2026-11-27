@@ -29,6 +29,10 @@
       get: async p => (await db.get(r(p))).val(),
       on: (p, cb) => db.onValue(r(p), s => cb(s.val())),
       onConnection: cb => db.onValue(db.ref(database, '.info/connected'), s => cb(!!s.val())),
+      // Take a slot only if it is free (or already ours). Safe when two phones try at the same instant.
+      claim: async (p, v) => (await db.runTransaction(r(p), cur => (cur === null || cur === v ? v : undefined))).committed,
+      // The server deletes this value by itself when this device drops off the internet.
+      goneOnDisconnect: p => db.onDisconnect(r(p)).remove(),
     };
   }
 
@@ -101,6 +105,13 @@
         window.addEventListener('online', () => cb(true));
         window.addEventListener('offline', () => cb(false));
       },
+      claim: async (p, v) => {
+        const cur = read(p);
+        if (cur !== null && cur !== v) return false;
+        await set(p, v);
+        return true;
+      },
+      goneOnDisconnect: p => { window.addEventListener('pagehide', () => set(p, null)); return Promise.resolve(); },
     };
   }
 
@@ -109,5 +120,8 @@
     connect: () => (LIVE ? connectFirebase() : Promise.resolve(connectLocal())),
     esc: s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
     LETTERS: ['A', 'B', 'C', 'D'],
+    // Team name -> a key that is safe to store and the same for "The Owls" and "the owls".
+    nameKey: n => encodeURIComponent(String(n).trim().replace(/\s+/g, ' ').toLowerCase()).replace(/\./g, '%2E'),
+    newId: pre => pre + Math.random().toString(36).slice(2, 10) + Date.now().toString(36),
   };
 })();

@@ -1,6 +1,7 @@
-question,A,B,C,D,answer,points,time,media,start,end
-Which planet is known as the Red Planet?,Venus,Mars,Jupiter,Mercury,B,1000,20,,,
-What shape is shown on screen?,Circle,Square,Triangle,Hexagon,C,1000,15,media/sample.svg,,
-Watch the clip. What kind of animal is the main character?,Rabbit,Squirrel,Bear,Fox,A,2000,20,https://www.youtube.com/watch?v=aqz-KE-bpKQ,30,45
-What is the capital of Canada?,Toronto,Vancouver,Ottawa,Montréal,C,500,10,,,
-How many provinces does Canada have?,8,10,12,13,B,1500,15,,,
+question,A,B,C,D,answer,points,time,media,start,end,round,multiplier,size
+Which planet is known as the Red Planet?,Venus,Mars,Jupiter,Mercury,B,1000,10,,,,Warm-up,1,
+What shape is shown on screen?,Circle,Square,Triangle,Hexagon,C,1000,10,media/sample.svg,,,Warm-up,1,
+Watch the clip. What kind of animal is the main character?,Rabbit,Squirrel,Bear,Fox,A,1000,15,https://www.youtube.com/watch?v=aqz-KE-bpKQ,30,45,Screen time,1.5,
+What is the capital of Canada?,Toronto,Vancouver,Ottawa,Montréal,C,1000,10,,,,Screen time,1.5,
+How many provinces does Canada have?,8,10,12,13,B,1000,15,,,,Brain burners,2,
+Which element has the chemical symbol W?,Tungsten,Tin,Titanium,Tellurium,A,2000,15,,,,Brain burners,2,110
